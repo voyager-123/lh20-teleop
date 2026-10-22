@@ -1,0 +1,11 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.local.env
+build/
+install/
+log/
+teleop/data/
+validation/
+.DS_Store

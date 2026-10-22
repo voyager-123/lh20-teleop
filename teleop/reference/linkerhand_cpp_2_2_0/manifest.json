@@ -1,0 +1,14 @@
+{
+  "repository": "https://github.com/linker-bot/linkerhand-cpp-sdk",
+  "commit": "948da97ce591dc85cebcfc761463dec31ffd30a9",
+  "library_sha256": "dde9258906ad3c70fb0afc66eccad5f4ed4b02b01c51161cb6e9d04c34318d5d",
+  "no_hardware_access": true,
+  "other_sources": {
+    "fault_definition_commit": "927290b8e27f9e2df3cc5b0a0776c36e2fb5175e",
+    "fault_definition_path": "src/linkerbot/hand/l20/fault.py"
+  },
+  "sdk_version": "2.2.0",
+  "conversion": "range_to_arc(L20_10, LEFT, raw16)",
+  "samples": "g20_left_raw_to_rad.json",
+  "note": "Native manufacturer arithmetic evidence; swapped is a separate runtime adapter."
+}

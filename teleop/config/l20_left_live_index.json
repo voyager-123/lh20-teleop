@@ -1,0 +1,20 @@
+{
+  "schema": "lh20.bounded_index_auto.v1",
+  "hand": "left",
+  "hand_joint": "L20-10",
+  "firmware_version": [
+    1,
+    0,
+    6
+  ],
+  "open_raw": 252,
+  "span": 20,
+  "window_raw": [
+    232,
+    252
+  ],
+  "operator_confirmed_direction": "raw decrease bends index toward palm",
+  "evidence_file": "teleop/data/probe_index_1_1792668515436943151.json",
+  "evidence_sha256": "de2e89aca98b372def714b4b2b4a2c339a97bb593064ef370ce7f09dfb317266",
+  "physical_angle_calibration": false
+}

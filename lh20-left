@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+set -eo pipefail
+workspace_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+hand=left
+case "${1:---help}" in
+  -h|--help)
+    echo "LH20 $hand 固定入口：vision | sdk | status | jog | teleop | check"
+    echo "用法：$0 vision [--camera 0 | --self-test]"
+    echo "      $0 sdk | status | jog [--slot 1 --delta -5 --return [--execute]]"
+    echo "      $0 teleop [--span 20] [--execute]  (已验证左手食指根部随动)"
+    echo "此公开初稿左手 vision 默认整手随动，拇指 swapped；可显式覆盖。"
+    echo "vision --scope hand --preview 只看整手模型和转换值；Q 退出。"
+    exit 0 ;;
+  vision|sdk|status|jog|teleop)
+    for argument in "$@"; do
+      case "$argument" in
+        --hand|--hand=*) echo "此入口固定为 $hand；请使用另一个左右手入口。" >&2; exit 2 ;;
+      esac
+    done
+    if [[ "$1" == "vision" ]]; then
+      shift
+      exec "$workspace_dir/lh20" vision --scope hand --thumb-axes swapped "$@" --hand "$hand"
+    fi
+    exec "$workspace_dir/lh20" "$@" --hand "$hand" ;;
+  *) exec "$workspace_dir/lh20" "$@" ;;
+esac

@@ -1,0 +1,41 @@
+{
+  "release": "0.1.0-draft",
+  "date": "2026-10-22",
+  "tested_platform": "Ubuntu 24.04 x86_64",
+  "tested_hand": "left L20-10 (G20), firmware 1.0.6",
+  "accepted_thumb_axes": "swapped",
+  "status": "User confirmed basic imitation; no quantitative task benchmark",
+  "source_factory_profile_sha256": "3cf90e918544b176b864188d38187ff66b25d97a6e1f5d58d846a79e6fbe3789",
+  "source_model_sha256": "cefa00cf95eeaaf3693f6d310f0864d2a47f914aa570e717bec55d0f07c290d2",
+  "public_profile_sha256": "5bb3f16ed735dfda8f5d52e01429f25044e200d7e858839bd15838843bf9d123",
+  "public_model_sha256": "74d29c43b9098fd5a553e19019868b4303f0b7955d6b109b2747fb23cb698d16",
+  "portability_changes": [
+    "relative mesh paths",
+    "local-only device identity",
+    "Conda interpreter discovered at runtime"
+  ],
+  "file_sha256": {
+    "teleop/models/l20_10_left/meshes/ring_metacarpals.STL": "db1a723a38902cc02d57e894bf7d216751638bc1ee33034ebb54cf1f54996313",
+    "teleop/models/l20_10_left/meshes/thumb_proximal.STL": "1116db3168db537dd3eac5d7eed7781351e734a3be01ea070220319215a3b042",
+    "teleop/models/l20_10_left/meshes/middle_proximal.STL": "170476b81ce0d0f6c1999fc7c6928958509b1ac7380e79e0f3394fceb331ad43",
+    "teleop/models/l20_10_left/meshes/middle_middle.STL": "f71bb3fd3fb8d2cb5316e58ad2a3eaa3e4a6542635091e1c0715decd576045a5",
+    "teleop/models/l20_10_left/meshes/wrist_base_link.STL": "9043a8e91490d95b1441cfebbf571e291d261b16d76783790b84c31f8e528759",
+    "teleop/models/l20_10_left/meshes/pinky_metacarpals.STL": "db1a723a38902cc02d57e894bf7d216751638bc1ee33034ebb54cf1f54996313",
+    "teleop/models/l20_10_left/meshes/ring_proximal.STL": "b87afd96cfda84d09c698a4fa2d10b4d1d5ce7edfd6f30b85d2e848341ab7c0f",
+    "teleop/models/l20_10_left/meshes/pinky_distal.STL": "ec66e2fbd489d76ddfa8ef4de7beba4e9e801009b3540501a91d958b2b1a8ea3",
+    "teleop/models/l20_10_left/meshes/thumb_metacarpals_base1.STL": "c0b95b991748552e95cd5752dfeeb3e6e95b924dbf0c2b47ff6cd6efe492b786",
+    "teleop/models/l20_10_left/meshes/ring_middle.STL": "a4150d1491c526e854f3d15ba004a623276a588e02b7a3ec10ddaacbc0bb278e",
+    "teleop/models/l20_10_left/meshes/index_distal.STL": "4bcc9c4dd677ca22c3a43caa648574ff38ab96efffa0cb8888e3e16f7328f357",
+    "teleop/models/l20_10_left/meshes/pinky_proximal.STL": "df168a6f3d033d57a7eb5db83dfe0b4e310f51adf1643e912daf0463a82d5f61",
+    "teleop/models/l20_10_left/meshes/thumb_distal.STL": "e963b0adb3b6b5bdae2441b46b8e3fb975efc0431d41719c005553c0e5f9df0f",
+    "teleop/models/l20_10_left/meshes/index_metacarpals.STL": "db1a723a38902cc02d57e894bf7d216751638bc1ee33034ebb54cf1f54996313",
+    "teleop/models/l20_10_left/meshes/middle_metacarpals.STL": "db1a723a38902cc02d57e894bf7d216751638bc1ee33034ebb54cf1f54996313",
+    "teleop/models/l20_10_left/meshes/ring_distal.STL": "793d907c11bf6837e29766a3ff4dd162a94a0ccb0f1e2917f79277d39b885564",
+    "teleop/models/l20_10_left/meshes/middle_distal.STL": "ec66e2fbd489d76ddfa8ef4de7beba4e9e801009b3540501a91d958b2b1a8ea3",
+    "teleop/models/l20_10_left/meshes/index_proximal.STL": "809d9ef675961b3460b34cfe225bbf3bb4ddc81c1cd7c318a4d01cd0c2345c32",
+    "teleop/models/l20_10_left/meshes/index_middle.STL": "a7f415cea841919e9655bb85c0102ab4772a571ca11effd66e31f8b7017ca042",
+    "teleop/models/l20_10_left/meshes/pinky_middle.STL": "f71bb3fd3fb8d2cb5316e58ad2a3eaa3e4a6542635091e1c0715decd576045a5",
+    "teleop/models/l20_10_left/meshes/thumb_metacarpals_base2.STL": "69b857b11b4d215d2b0d52b438b9343f9edf93a64af44992c97064a582c2d27e",
+    "teleop/models/l20_10_left/meshes/thumb_metacarpals.STL": "5a9e327caec88510731160c14df13c88fccc38467aa031bc4aae9dc53d79df19"
+  }
+}

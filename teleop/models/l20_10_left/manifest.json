@@ -1,0 +1,12 @@
+{
+  "source_urdf": "linkerhand-urdf/archive/lhg20/left/linkerhand_lhg20_left.urdf",
+  "source_sha256": "e25f8052710afcf98b2efe58cdcfa545f96e1fc4ff41de526414960ce79f49a8",
+  "changes": [
+    "middle_mcp_pithch spelling -> middle_mcp_pitch",
+    "middle_dip effort/velocity 0 -> 1 (matches other coupled distal joints; model bounds, not measured device speeds)",
+    "mesh filenames resolved to original manufacturer meshes",
+    "Publication: mesh paths made relative; only required left meshes bundled."
+  ],
+  "factory_native_axes": true,
+  "hardware_alignment_measured": false
+}

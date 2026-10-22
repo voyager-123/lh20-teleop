@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+set -eo pipefail
+workspace_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+# Local device identity and optional interpreter override never enter Git.
+if [[ -f "$workspace_dir/.local.env" ]]; then
+  set -a
+  source "$workspace_dir/.local.env"
+  set +a
+fi
+conda_base="${LH20_CONDA_BASE:-$(conda info --base 2>/dev/null || true)}"
+if [[ -z "$conda_base" ]]; then
+  for candidate in "$HOME/miniconda3" "$HOME/anaconda3" "$HOME/miniforge3"; do
+    if [[ -f "$candidate/etc/profile.d/conda.sh" ]]; then conda_base="$candidate"; break; fi
+  done
+fi
+if [[ ! -f "$conda_base/etc/profile.d/conda.sh" ]]; then
+  echo '找不到 Conda；请设置 LH20_CONDA_BASE。' >&2; exit 1
+fi
+source "$conda_base/etc/profile.d/conda.sh"
+export LH20_VISION_PYTHON="${LH20_VISION_PYTHON:-$conda_base/envs/lh20_vision/bin/python}"
+if [[ "${1-}" == "vision" ]]; then
+  conda activate lh20_vision
+  echo '(lh20_vision) 摄像头与重定向环境。' >&2
+else
+  conda activate lh20_ros2
+  if [[ ! -f "$workspace_dir/install/setup.bash" ]]; then
+    echo '找不到 install/setup.bash，请先构建 ROS 工作区。' >&2
+    exit 1
+  fi
+  source "$workspace_dir/install/setup.bash"
+  export ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST
+  unset ROS_LOCALHOST_ONLY ROS_STATIC_PEERS ROS_DISCOVERY_SERVER
+  echo '(lh20_ros2) ROS 控制环境；仅本机 ROS 发现。' >&2
+fi
+cd -- "$workspace_dir"
+exec python "$workspace_dir/teleop/bridge/lh20_cli.py" "$@"
