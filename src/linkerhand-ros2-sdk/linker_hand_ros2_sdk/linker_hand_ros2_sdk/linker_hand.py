@@ -18,6 +18,7 @@ from std_msgs.msg import Float32MultiArray, Header, String
 
 from linker_hand_ros2_sdk.LinkerHand.linker_hand_api import LinkerHandApi
 from linker_hand_ros2_sdk.LinkerHand.utils.joint_commands import index_positions_to_can
+from linker_hand_ros2_sdk.LinkerHand.utils.g20_io import G20IoLoop
 from linker_hand_ros2_sdk.LinkerHand.utils.color_msg import ColorMsg
 
 
@@ -43,6 +44,7 @@ class LinkerHand(Node):
         self.sleep_time = 0.005
         self.cmd_lock = False
         self.last_hand_post_cmd = None # 最新手指位置命令
+        self.last_position_received = None
         self.last_index_post_cmd = None  # Isolated index-finger probe (0x42 only)
         self.last_hand_vel_cmd = None # 最新手指速度命令
         self.last_hand_eff_cmd = None # 最新手指力矩命令
@@ -92,6 +94,7 @@ class LinkerHand(Node):
 
         self.hand_setting_sub = self.create_subscription(String,'/cb_hand_setting_cmd', self.hand_setting_cb, 10)
         self._init_hand()
+        self.g20_loop = G20IoLoop()
         time.sleep(1)
         self.run_count = 0 # 计数器，用于记录运行次数
         self.timer = self.create_timer(0.01, self.run)  # 100 Hz
@@ -167,8 +170,10 @@ class LinkerHand(Node):
         return any(abs(self.last_hand_post_cmd - pose) >= 3 for self.last_hand_post_cmd, pose in zip(self.last_hand_post_cmd, pose))
 
     def hand_control_cb(self, msg):
-        if self.last_hand_post_cmd is None or self.list_check(msg.position):
+        if (G20IoLoop.supported(self.hand_joint, self.sdk_v, self.is_touch, self.modbus)
+                or self.last_hand_post_cmd is None or self.list_check(msg.position)):
             self.last_hand_post_cmd = msg.position
+            self.last_position_received = time.monotonic()
         if self.last_hand_vel_cmd is None or self.list_check(msg.velocity):
             self.last_hand_vel_cmd = msg.velocity
         if self.last_hand_eff_cmd is None or self.list_check(msg.effort):
@@ -187,6 +192,9 @@ class LinkerHand(Node):
         self.last_index_post_cmd = payload
 
     def run(self):
+        if G20IoLoop.supported(self.hand_joint, self.sdk_v, self.is_touch, self.modbus):
+            self.g20_loop.run(self)
+            return
         if self.sdk_v == 1:
             self.sleep_time = 0.009
         if self.hand_state_pub.get_subscription_count() > 0:
@@ -272,10 +280,15 @@ class LinkerHand(Node):
 
 
     def pub_state(self):
+        state_generation = info_generation = -1
         while True:
-            if self.hand_state_pub.get_subscription_count() > 0:
+            optimized = G20IoLoop.supported(self.hand_joint, self.sdk_v, self.is_touch, self.modbus)
+            generation = self.g20_loop.state_generation
+            if (self.hand_state_pub.get_subscription_count() > 0 and
+                    (not optimized or (generation > 0 and generation != state_generation))):
                 msg = self.joint_state_msg(self.last_hand_state, self.last_hand_vel)
                 self.hand_state_pub.publish(msg)
+                state_generation = generation
             if self.is_touch and self.touch_type == 1 and self.modbus == "None" and self.touch_pub.get_subscription_count() > 0:
                 msg = Float32MultiArray()
                 msg.data = [float(val) for sublist in self.force for val in sublist]
@@ -285,10 +298,13 @@ class LinkerHand(Node):
                 self.pub_matrix_dic()
                 # 发布矩阵压感和值JSON格式
                 self.pub_matrix_mass(dic=self.matrix_dic)
-            if self.hand_info_pub.get_subscription_count() > 0:
+            generation = self.g20_loop.info_generation
+            if (self.hand_info_pub.get_subscription_count() > 0 and
+                    (not optimized or (generation > 0 and generation != info_generation))):
                 msg = String()
                 msg.data = json.dumps(self.last_hand_info)
                 self.hand_info_pub.publish(msg)
+                info_generation = generation
             time.sleep(self.hz)
 
     def pub_matrix_mass(self, dic):

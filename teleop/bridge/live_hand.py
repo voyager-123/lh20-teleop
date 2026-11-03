@@ -12,7 +12,7 @@ import subprocess
 import sys
 import time
 
-from factory_mapping import FactoryMapping, ACTIVE, MODEL_ID
+from factory_mapping import FactoryMapping, ACTIVE, MODEL_ID, BRIDGE_PATH_POLICY
 from tracking_governor import LatencyAwareGovernor
 from live_index import SOURCE_COMMIT, VisionReceiver, default_socket
 from probe_index_joint import validate_positions, feedback_errors, topic_names, vision_subprocess_env
@@ -21,7 +21,9 @@ ROOT=Path(__file__).resolve().parents[1]
 
 
 class HandController:
-    def __init__(self, baseline, mapping=None):
+    def __init__(self, baseline, mapping=None,algorithm='vector'):
+        if algorithm not in ('vector','dexpilot'):raise ValueError('Unknown retargeting algorithm')
+        self.algorithm=algorithm
         self.mapping=mapping or FactoryMapping()
         self.last_command=validate_positions(baseline)
         for i in (11,12,13,14):self.last_command[i]=255
@@ -34,10 +36,17 @@ class HandController:
         self.epoch=None
         self.last_input=-math.inf
         self.last_step=-math.inf
-        self.samples=deque(maxlen=3)
+        self.samples=deque(maxlen=8)
+        self.thumb_profile='segments'
+        self.retargeting_config_sha256=None
 
     def pause(self,reason):
         self.active=False;self.samples.clear();self.state=reason
+
+    def recheck_feedback(self):
+        # A moving readback invalidates one CAD result, not valid vision.
+        # The next iteration must audit a new path before publishing anything.
+        self.state='CAD_RECHECKING_MOVING_FEEDBACK'
 
     def accept(self,p,now):
         try:
@@ -45,6 +54,8 @@ class HandController:
                     p.get('scope')!='hand' or p.get('model')!=MODEL_ID or \
                     p.get('model_sha256')!=self.mapping.model_hash or p.get('source_commit')!=SOURCE_COMMIT or p.get('thumb_axes','native')!=self.mapping.thumb_axes:
                 raise ValueError('Wrong side/model/source/scope')
+            if p.get('retargeting_algorithm','vector')!=self.algorithm:
+                raise ValueError('Wrong retargeting algorithm')
             session,seq,epoch=p.get('stream_session'),p.get('seq'),p.get('calibration_epoch')
             if not isinstance(session,str) or len(session)!=32 or type(seq) is not int or seq<0 or type(epoch) is not int or epoch<0:
                 raise ValueError('Invalid session/sequence')
@@ -59,7 +70,15 @@ class HandController:
                 self.pause('VISION_RESTARTED');self.epoch=epoch
             if type(p.get('valid')) is not bool or type(p.get('operator_enabled')) is not bool:
                 raise ValueError('Invalid enable/valid flags')
-            if not p['valid'] or not p['operator_enabled'] or p.get('auto_follow') is not True or p.get('cad_collision_hits'):
+            cad_policy = p.get('cad_validation')
+            if cad_policy is not None and (cad_policy != BRIDGE_PATH_POLICY or self.algorithm != 'vector'):
+                raise ValueError('Unknown CAD validation policy')
+            # A distant requested endpoint is not the next motor command. New
+            # Vector streams delegate contact handling to the existing worker,
+            # which audits the actual bounded path and can hold only involved
+            # fingers. Legacy streams retain their endpoint rejection policy.
+            if not p['valid'] or not p['operator_enabled'] or p.get('auto_follow') is not True or \
+                    (p.get('cad_collision_hits') and cad_policy != BRIDGE_PATH_POLICY):
                 self.pause('WAITING_FOR_VALID_LEFT_HAND');return
             names,angles=p.get('joint_names'),p.get('position_rad')
             if not isinstance(names,list) or not isinstance(angles,list) or len(names)!=16 or len(angles)!=16 or \
@@ -70,9 +89,11 @@ class HandController:
                 raise ValueError('Factory target/profile mismatch')
             self.last_input=stamp/1e9
             self.samples.append(stamp/1e9)
-            if len(self.samples)<3 or self.samples[-1]-self.samples[0]<.06:
+            if not self.active and (len(self.samples)<3 or self.samples[-1]-self.samples[0]<.06):
                 self.active=False;self.state='DETECTING_LEFT_HAND';return
             self.desired=desired;self.active=True;self.state='AUTO_FOLLOWING_FACTORY_LEFT_HAND'
+            self.thumb_profile=p.get('thumb_profile','segments')
+            self.retargeting_config_sha256=p.get('retargeting_config_sha256')
         except (ValueError,KeyError,TypeError) as e:
             self.pause('REJECTED_FRAME: '+str(e))
 
@@ -123,8 +144,10 @@ class CadWorker:
         if not line:raise RuntimeError('Factory CAD worker exited')
         return json.loads(line)
 
-    def check(self,before,after,pump=None):
-        self.process.stdin.write(json.dumps({'before':before,'after':after},allow_nan=False)+'\n')
+    def check(self,before,after,pump=None,hold=None):
+        request={'before':before,'after':after}
+        if hold is not None:request['hold']=hold
+        self.process.stdin.write(json.dumps(request,allow_nan=False)+'\n')
         self.process.stdin.flush()
         return self.read(1.,pump)
 
@@ -164,6 +187,8 @@ def run(args):
             latest['info']=json.loads(msg.data)
             fault=latest['info'].get('fault') if isinstance(latest['info'],dict) else None
             if fault!=last_fault:record('raw_fault_change',fault=fault);last_fault=fault
+            timing=latest['info'].get('sdk_io') if isinstance(latest['info'],dict) else None
+            if isinstance(timing,dict):record('sdk_io',timing=timing)
         except ValueError:latest['info']=None
     def guard():
         errors=feedback_errors(latest,time.monotonic(),ignore_128=args.fault_policy in ('ignore-128','ignore-64-128'),ignore_64=args.fault_policy=='ignore-64-128')
@@ -184,7 +209,7 @@ def run(args):
             if len(recent)==5 and all(max(q[i] for q in recent)-min(q[i] for q in recent)<=2 for i in ACTIVE) and not feedback_errors(latest,time.monotonic(),ignore_128=args.fault_policy in ('ignore-128','ignore-64-128'),ignore_64=args.fault_policy=='ignore-64-128'):break
         else:raise RuntimeError('No stable fresh left-hand feedback')
         guard()
-        engine=HandController(latest['q'],mapping)
+        engine=HandController(latest['q'],mapping,getattr(args,'retargeting','vector'))
         governor=LatencyAwareGovernor(mapping,isolate_stalls=True)
         cad=CadWorker(mapping.thumb_axes)
         initial=cad.check(engine.last_command,engine.last_command)
@@ -199,7 +224,7 @@ def run(args):
         guard()
         if len(recent)!=5 or any(abs(q[i]-engine.last_command[i])>2 for q in recent for i in ACTIVE):
             raise RuntimeError('Starting pose moved during factory CAD initialization')
-        engine=HandController(latest['q'],mapping)
+        engine=HandController(latest['q'],mapping,getattr(args,'retargeting','vector'))
         if not cad.check(engine.last_command,engine.last_command)['ok']:raise RuntimeError('Refreshed starting pose failed CAD check')
         if args.execute:
             publisher=node.create_publisher(JointState,topics['full'],1)
@@ -210,13 +235,14 @@ def run(args):
         record('start',execute=args.execute,baseline=engine.last_command,profile_sha256=mapping.sha256,
                model_sha256=mapping.model_hash,source=mapping.profile['source'],fault_policy=args.fault_policy,
                thumb_axes=mapping.thumb_axes,tracking_stall_action='hold_affected_joint',
+               retargeting_algorithm=engine.algorithm,
                mapping='manufacturer_left_g20_native_model',physical_angle_calibration=False,
                feedback_pacing={'mode':'latency_aware','max_lead_by_slot':governor.lead_limits,
                                 'history_seconds':governor.latency_seconds,'stall_seconds':governor.stall_seconds},
                ignored_fault_codes=[64,128] if args.fault_policy=='ignore-64-128' else [128] if args.fault_policy=='ignore-128' else [],
                slew_velocity_rad_s=mapping.velocities)
         print('(lh20_ros2) '+('整手控制已接通' if args.execute else '仅控制桥预览')+'：16 个独立关节；按模型角速度限速，至多 30 Hz；只跟随最新目标；Q 退出。',flush=True)
-        end=time.monotonic()+args.duration;last_state=None;next_print=0.;next_wait_print=0.;cad_waiting=False;next_block_log=0.;last_block_key=None
+        end=time.monotonic()+args.duration;last_state=None;next_print=0.;next_wait_print=0.;cad_waiting=False;next_block_log=0.;last_block_key=None;held_fingers=[]
         while time.monotonic()<end:
             rclpy.spin_once(node,timeout_sec=.01);guard()
             for _ in range(32):
@@ -243,32 +269,44 @@ def run(args):
                         next_wait_print=now+1
                 observed=latest['q'].copy()
                 cad_began=time.monotonic()
-                checked=cad.check(observed,target,pump=lambda: rclpy.spin_once(node,timeout_sec=0.))
+                checked=cad.check(observed,target,pump=lambda: rclpy.spin_once(node,timeout_sec=0.),hold=engine.last_command)
                 cad_ms=(time.monotonic()-cad_began)*1000
                 if not checked['ok']:
                     cad_waiting=True
                     block_key=json.dumps(checked.get('collisions',[]),sort_keys=True)+str(checked.get('reason'))
                     if now>=next_block_log or block_key!=last_block_key:
-                        record('cad_blocked',check=checked)
+                        record('cad_blocked',check=checked,feedback=observed,requested=target,
+                               previous_target=engine.last_command,cad_ms=cad_ms)
                         next_block_log=now+1;last_block_key=block_key
                 else:
                     cad_waiting=False
+                    target=checked['target']
+                    selected_holds=checked.get('held_fingers',[])
+                    if selected_holds!=held_fingers:
+                        held_fingers=selected_holds
+                        record('cad_partial_follow',held_fingers=held_fingers,blocked_check=checked.get('blocked_check'))
+                        print('(lh20_ros2) '+('CAD 暂停接触相关手指：'+', '.join(held_fingers)+'；其余手指继续随动。' if held_fingers else 'CAD 接触限制解除，恢复整手随动。'),flush=True)
                     rclpy.spin_once(node,timeout_sec=0.);guard()
                     now=time.monotonic()
                     if now-engine.last_input>.25:engine.pause('WAITING_FOR_LEFT_HAND')
                     elif any(abs(latest['q'][i]-observed[i])>2 for i in ACTIVE):
-                        engine.pause('FEEDBACK_MOVED_DURING_CAD_CHECK')
+                        record('cad_feedback_changed',before=observed,after=latest['q'],cad_ms=cad_ms)
+                        engine.recheck_feedback()
                     else:
+                        # Validate the selected partial target against the same
+                        # command velocity bound before it can reach the SDK.
+                        engine.commit(target,now)
                         if publisher is not None:
                             msg=JointState();msg.header.stamp=node.get_clock().now().to_msg()
                             msg.name=[next(n for n,e in mapping.joints.items() if e['slot']==i) if i in ACTIVE else 'reserved' for i in range(20)]
                             msg.position=[float(v) for v in target];publisher.publish(msg)
-                        engine.commit(target,now)
                         record('command' if publisher is not None else 'preview',target=target,desired=engine.desired,feedback=latest['q'],cad_samples=checked['samples'],
                                vision_age_ms=(now-engine.last_input)*1000,cad_ms=cad_ms,
-                               cad_recovery=checked.get('recovery_from_existing_collision',False))
+                               cad_recovery=checked.get('recovery_from_existing_collision',False),cad_held_fingers=held_fingers,
+                               feedback_hold_slots=checked.get('feedback_hold_slots',[]),thumb_profile=engine.thumb_profile,
+                               retargeting_algorithm=engine.algorithm,retargeting_config_sha256=engine.retargeting_config_sha256)
                         if now>=next_print:print('(lh20_ros2) root='+str(target[:5])+' tip='+str(target[15:]),flush=True);next_print=now+1
-            display_state='CAD_WAITING_FOR_SEPARATING_MOTION' if cad_waiting and engine.active else engine.state
+            display_state=('CAD_WAITING_FOR_SEPARATING_MOTION' if cad_waiting else 'CAD_PARTIAL_FOLLOWING' if held_fingers else engine.state) if engine.active else engine.state
             if display_state!=last_state:
                 last_state=display_state;record('state',state=last_state);print('(lh20_ros2) '+last_state,flush=True)
     except Exception as error:
@@ -288,6 +326,7 @@ def main():
     p.add_argument('--hand',choices=('left',),required=True);p.add_argument('--auto-follow',action='store_true')
     p.add_argument('--execute',action='store_true');p.add_argument('--duration',type=float,default=3600)
     p.add_argument('--thumb-axes',choices=('native','swapped'),default='native')
+    p.add_argument('--retargeting',choices=('vector','dexpilot'),default='vector')
     p.add_argument('--socket',type=Path);p.add_argument('--fault-policy',choices=('stop','ignore-128','ignore-64-128'),default='stop')
     args=p.parse_args()
     try:run(args)

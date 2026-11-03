@@ -1,0 +1,75 @@
+# Optional LEFT thumb palm anchor: index MCP (5) to thumb IP (3).
+# Model-only evaluated; physical hand proportions and zero offsets are uncalibrated.
+# Keep the original 10 segment vectors, factory raw mapping and axis adapter.
+retargeting:
+  type: vector
+  urdf_path: models/l20_10_left/linkerhand_l20_10_left.urdf
+  add_dummy_free_joint: false
+  target_joint_names:
+  - thumb_cmc_yaw
+  - thumb_cmc_roll
+  - thumb_cmc_pitch
+  - thumb_mcp
+  - index_mcp_roll
+  - index_mcp_pitch
+  - index_pip
+  - middle_mcp_roll
+  - middle_mcp_pitch
+  - middle_pip
+  - ring_mcp_roll
+  - ring_mcp_pitch
+  - ring_pip
+  - pinky_mcp_roll
+  - pinky_mcp_pitch
+  - pinky_pip
+  target_origin_link_names:
+  - thumb_metacarpals
+  - thumb_proximal
+  - index_proximal
+  - index_middle
+  - middle_proximal
+  - middle_middle
+  - ring_proximal
+  - ring_middle
+  - pinky_proximal
+  - pinky_middle
+  - index_proximal
+  target_task_link_names:
+  - thumb_proximal
+  - thumb_distal
+  - index_middle
+  - index_distal
+  - middle_middle
+  - middle_distal
+  - ring_middle
+  - ring_distal
+  - pinky_middle
+  - pinky_distal
+  - thumb_distal
+  target_link_human_indices:
+  - - 1
+    - 2
+    - 5
+    - 6
+    - 9
+    - 10
+    - 13
+    - 14
+    - 17
+    - 18
+    - 5
+  - - 2
+    - 3
+    - 6
+    - 7
+    - 10
+    - 11
+    - 14
+    - 15
+    - 18
+    - 19
+    - 3
+  scaling_factor: 1.0
+  has_joint_limits: true
+  ignore_mimic_joint: false
+  low_pass_alpha: 0.6

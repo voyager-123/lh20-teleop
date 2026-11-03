@@ -102,6 +102,20 @@ class FactoryHandTests(unittest.TestCase):
         for _ in range(3):self.feed()
         self.assertIsNone(self.feed(seq=self.seq-1))
 
+    def test_new_vector_contact_request_reaches_bounded_path_audit_without_global_pause(self):
+        q=self.open.copy();q['thumb_cmc_pitch']=.6;q['index_mcp_pitch']=.5
+        hits=[{'a':'thumb_distal_0','b':'index_distal_0','kind':'cross_finger'}]
+        for _ in range(3):
+            target=self.feed(q,cad_collision_hits=hits,cad_validation='bridge_path_v1')
+        self.assertTrue(self.engine.active)
+        self.assertIsNotNone(target)
+        self.assertLessEqual(self.m.step_interval(self.baseline,target),.04+1e-9)
+        self.assertEqual(self.engine.desired,self.m.encode(q))
+        self.assertNotEqual(target,self.engine.desired)
+        # Candidates still require the separate worker's full-path approval;
+        # accepting a distant endpoint is not authorization to publish it.
+        self.assertIsNone(self.feed(q,cad_collision_hits=hits,cad_validation='skip'))
+
     def test_one_command_full_hand_routes_preview_selftest_and_automatic(self):
         for extra,entry in (([], 'execv'),(['--preview'],'execve'),(['--self-test'],'execve')):
             with patch.object(lh20_cli.os,entry,side_effect=SystemExit(0)) as execute:

@@ -65,5 +65,14 @@ class ThumbHoldTests(unittest.TestCase):
                 command=run.call_args.args[1];self.assertEqual(command[command.index('--thumb-axes')+1],'swapped')
         self.assertEqual(lh20_cli.main(['vision','--hand','left','--thumb-axes','swapped']),1)
 
+    def test_palm_profile_reaches_both_camera_and_automatic_session(self):
+        for extra,method in (([],'execv'),(['--preview'],'execve'),(['--self-test'],'execve')):
+            with patch.object(lh20_cli.os,method,side_effect=SystemExit(0)) as run:
+                with self.assertRaises(SystemExit):
+                    lh20_cli.main(['vision','--hand','left','--scope','hand','--thumb-axes','swapped','--thumb-profile','palm',*extra])
+                command=run.call_args.args[1]
+                self.assertEqual(command[command.index('--thumb-profile')+1],'palm')
+        self.assertEqual(lh20_cli.main(['vision','--hand','left','--thumb-profile','palm']),1)
+
 
 if __name__=='__main__':unittest.main()

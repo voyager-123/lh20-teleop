@@ -1,4 +1,7 @@
-# LEFT L20-10: native factory LHG20 axes and coupled-joint model.
+# LEFT L20-10: segment vectors plus thumb IP-to-tip direction.
+# Fixed tip frame is generated from the original mesh; physical CAD stays original.
+# The local ThumbResponsiveOptimizer refines three unit directions independently.
+# Camera mode adds anatomical root guidance by default; directions restores v2.
 retargeting:
   type: vector
   urdf_path: models/l20_10_left/linkerhand_l20_10_left.urdf
@@ -31,6 +34,7 @@ retargeting:
   - ring_middle
   - pinky_proximal
   - pinky_middle
+  - thumb_distal
   target_task_link_names:
   - thumb_proximal
   - thumb_distal
@@ -42,6 +46,7 @@ retargeting:
   - ring_distal
   - pinky_middle
   - pinky_distal
+  - teleop_thumb_tip
   target_link_human_indices:
   - - 1
     - 2
@@ -53,6 +58,7 @@ retargeting:
     - 14
     - 17
     - 18
+    - 3
   - - 2
     - 3
     - 6
@@ -63,6 +69,7 @@ retargeting:
     - 15
     - 18
     - 19
+    - 4
   scaling_factor: 1.0
   has_joint_limits: true
   ignore_mimic_joint: false

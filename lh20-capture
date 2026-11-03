@@ -1,0 +1,19 @@
+#!/usr/bin/env python3
+"""Camera-only research capture. No ROS driver or control bridge is started."""
+import os
+from pathlib import Path
+import sys
+
+root = Path(__file__).resolve().parent
+sys.path.insert(0, str(root / "teleop/bridge"))
+from runtime_paths import vision_python
+from probe_index_joint import vision_subprocess_env
+
+python = vision_python()
+env = vision_subprocess_env(python)
+for key in ("QT_PLUGIN_PATH", "QT_QPA_PLATFORM_PLUGIN_PATH"):
+    env.pop(key, None)
+env.setdefault("MPLCONFIGDIR", "/tmp/lh20-capture-matplotlib")
+os.chdir(root)
+os.execve(str(python), [str(python), "-E", "-s", "-u",
+                      str(root / "teleop/research/preview_capture.py"), *sys.argv[1:]], env)

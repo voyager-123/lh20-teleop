@@ -94,6 +94,7 @@ def run(args):
     logs.mkdir(exist_ok=True)
     stamp = str(time.time_ns())
     bridge_extra=['--thumb-axes',getattr(args,'thumb_axes','native')] if scope=='hand' else []
+    if scope=='hand':bridge_extra+=['--retargeting',getattr(args,'retargeting','vector')]
     sdk = bridge = camera = None
     files = []
     try:
@@ -119,6 +120,10 @@ def run(args):
             if not ipc.exists():
                 raise RuntimeError('实时桥启动超时')
             # Vision stays in its separate Python 3.10 environment.
+            if scope=='hand' and args.record is None:
+                algorithm=getattr(args,'retargeting','vector')
+                args.record=logs/f'vision_{algorithm}_{stamp}.jsonl'
+                print('(lh20_vision) '+algorithm+' 关键点、目标与分段耗时记录：'+str(args.record),flush=True)
             command, env = vision_command(args)
             command += ['--stream', '--auto-follow', '--socket', str(ipc)]
             camera = subprocess.Popen(command, cwd=ROOT, env=env, start_new_session=True)

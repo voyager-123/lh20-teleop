@@ -120,6 +120,9 @@ def vision_command(args):
                '--hand', args.hand, '--camera', args.camera,
                '--rotate-deg', *map(str, args.rotate_deg)]
     command += ['--scope', getattr(args, 'scope', 'index'), '--thumb-axes',getattr(args,'thumb_axes','native')]
+    command += ['--thumb-profile',getattr(args,'thumb_profile','segments')]
+    command += ['--retargeting',getattr(args,'retargeting','vector')]
+    command += ['--thumb-root-mode',getattr(args,'thumb_root_mode','agile')]
     if args.self_test:
         command.append('--self-test')
     if args.record:
@@ -157,7 +160,10 @@ def main(argv=None):
     vision = sub.add_parser('vision', help='左手默认自动食指随动；--preview 仅视觉预览')
     vision.add_argument('--hand', choices=('left', 'right'), required=True)
     vision.add_argument('--camera', default='0')
+    vision.add_argument('--retargeting',choices=('vector','dexpilot'),default='vector')
     vision.add_argument('--thumb-axes',choices=('native','swapped'),default='native',help='native=厂家定义；swapped=拇指侧摆/横摆交换对比')
+    vision.add_argument('--thumb-profile',choices=('segments','palm'),default='segments',help='segments=原映射；palm=增加拇指相对掌部位置约束，待实机对比')
+    vision.add_argument('--thumb-root-mode',choices=('agile','directions'),default='agile',help='agile=拇指根部几何引导；directions=上一版纯方向目标')
     vision.add_argument('--scope', choices=('index', 'hand'), default='index', help='index=已验证食指；hand=厂家左手整手映射')
     vision.add_argument('--self-test', action='store_true', help='仅模型离线自检，不打开摄像头')
     vision.add_argument('--rotate-deg', nargs=3, type=float, default=[0, 0, 0])
@@ -174,7 +180,10 @@ def main(argv=None):
     automatic = sub.add_parser('_auto-vision', help=argparse.SUPPRESS)
     automatic.add_argument('--hand', choices=('left',), required=True)
     automatic.add_argument('--camera', default='0')
+    automatic.add_argument('--retargeting',choices=('vector','dexpilot'),default='vector')
     automatic.add_argument('--thumb-axes',choices=('native','swapped'),default='native')
+    automatic.add_argument('--thumb-profile',choices=('segments','palm'),default='segments')
+    automatic.add_argument('--thumb-root-mode',choices=('agile','directions'),default='agile')
     automatic.add_argument('--scope', choices=('index', 'hand'), default='index')
     automatic.add_argument('--rotate-deg', nargs=3, type=float, default=[0, 0, 0])
     automatic.add_argument('--record', type=Path)
@@ -187,13 +196,18 @@ def main(argv=None):
             from auto_vision import run
             return run(args)
         if args.command == 'vision':
+            if args.retargeting=='dexpilot' and (args.hand!='left' or args.scope!='hand' or args.thumb_profile!='segments'):
+                raise ValueError('DexPilot 仅支持左手整手模式，不能叠加 palm 实验目标')
+            if args.thumb_profile!='segments' and (args.hand!='left' or args.scope!='hand'):
+                raise ValueError('拇指掌部位置约束只支持左手整手模式')
             if args.thumb_axes!='native' and (args.hand!='left' or args.scope!='hand'):
                 raise ValueError('拇指交换对比只支持左手整手模式')
             if args.scope == 'hand' and (args.hand != 'left' or args.manual or args.stream):
                 raise ValueError('整手模式仅支持左手；直接用 vision --scope hand 或加 --preview')
             if args.hand == 'left' and not args.self_test and not args.preview and not args.manual:
                 command = [str(WORKSPACE / 'lh20'), '_auto-vision', '--hand', 'left', '--camera', args.camera,
-                           '--rotate-deg', *map(str, args.rotate_deg), '--scope', args.scope,'--thumb-axes',args.thumb_axes]
+                           '--rotate-deg', *map(str, args.rotate_deg), '--scope', args.scope,'--thumb-axes',args.thumb_axes,
+                           '--thumb-profile',args.thumb_profile,'--retargeting',args.retargeting,'--thumb-root-mode',args.thumb_root_mode]
                 if args.record:
                     command += ['--record', str(args.record.resolve())]
                 print('(lh20_vision) 左手自动随动：将启动或复用驱动及控制桥；Q 退出。', flush=True)

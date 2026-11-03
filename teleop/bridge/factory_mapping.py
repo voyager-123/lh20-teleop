@@ -12,6 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 PROFILE_SHA256 = '5bb3f16ed735dfda8f5d52e01429f25044e200d7e858839bd15838843bf9d123'
 MODEL_ID = 'models/l20_10_left/linkerhand_l20_10_left.urdf'
 ACTIVE = tuple(range(11)) + tuple(range(15, 20))
+BRIDGE_PATH_POLICY = 'bridge_path_v1'
 
 
 class FactoryMapping:

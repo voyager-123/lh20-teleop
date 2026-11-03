@@ -47,6 +47,32 @@ class LowLatencyTests(unittest.TestCase):
         self.assertGreater(target[1],before)
         self.assertEqual(helper.engine.desired,self.m.encode(helper.open))
 
+    def test_moving_feedback_retries_without_rearming_valid_vision(self):
+        helper=factory_tests.FactoryHandTests();helper.setUp()
+        for _ in range(3):helper.feed()
+        previous=helper.engine.last_command.copy()
+        helper.engine.recheck_feedback()
+        self.assertTrue(helper.engine.active)
+        self.assertEqual(helper.engine.last_command,previous)
+        self.assertEqual(helper.engine.state,'CAD_RECHECKING_MOVING_FEEDBACK')
+        # No stale command was committed. A new bounded candidate is available
+        # immediately, but real vision loss still requires full reacquisition.
+        self.assertIsNotNone(helper.engine.candidate(helper.now))
+        self.assertIsNone(helper.feed(valid=False))
+        self.assertIsNone(helper.feed());self.assertIsNone(helper.feed())
+        self.assertIsNotNone(helper.feed())
+
+    def test_60hz_vision_can_acquire_and_does_not_drop_back_to_detecting(self):
+        helper=factory_tests.FactoryHandTests();helper.setUp()
+        first_active=None
+        for k in range(20):
+            helper.now=100.+k/60;helper.seq=k
+            helper.engine.accept(helper.packet(),helper.now)
+            if helper.engine.active and first_active is None:first_active=k
+            if first_active is not None:self.assertTrue(helper.engine.active)
+        self.assertIsNotNone(first_active);self.assertLessEqual(first_active,5)
+        self.assertIsNone(helper.engine.candidate(helper.now+.3))
+
     def test_250ms_old_readback_does_not_throttle_fast_model_speed_motion(self):
         g=LatencyAwareGovernor(self.m);command=self.m.encode(self.open);actual=command.copy();reported=command.copy()
         history=deque();q=self.open.copy();q['index_mcp_pitch']=.6;desired=self.m.encode(q)

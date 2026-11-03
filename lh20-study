@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# Experimental acquisition; the existing teleoperation entry points are unchanged.
+set -eo pipefail
+study_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+if [[ -f "$study_root/.local.env" ]]; then
+  set -a
+  source "$study_root/.local.env"
+  set +a
+fi
+study_base="${LH20_CONDA_BASE:-$(conda info --base 2>/dev/null || true)}"
+if [[ -z "$study_base" ]]; then
+  for candidate in "$HOME/miniconda3" "$HOME/miniforge3" "$HOME/anaconda3"; do
+    if [[ -f "$candidate/etc/profile.d/conda.sh" ]]; then study_base="$candidate"; break; fi
+  done
+fi
+if [[ ! -f "$study_base/etc/profile.d/conda.sh" ]]; then
+  echo '找不到 Conda；请设置 LH20_CONDA_BASE。' >&2
+  exit 1
+fi
+source "$study_base/etc/profile.d/conda.sh"
+conda activate lh20_ros2
+export LH20_VISION_PYTHON="${LH20_VISION_PYTHON:-$study_base/envs/lh20_vision/bin/python}"
+if [[ -f "$study_root/install/setup.bash" ]]; then source "$study_root/install/setup.bash"; fi
+export ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST
+unset ROS_LOCALHOST_ONLY ROS_STATIC_PEERS ROS_DISCOVERY_SERVER
+export MPLCONFIGDIR="${MPLCONFIGDIR:-/tmp/lh20-study-matplotlib}"
+cd -- "$study_root"
+exec python "$study_root/teleop/research/study.py" "$@"
