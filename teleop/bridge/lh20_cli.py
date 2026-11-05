@@ -133,9 +133,9 @@ def vision_command(args):
 
 
 def selected_fault_policy(hand, requested=None):
-    # User confirmed this left hand's exact raw 64 and 128 codes on 2026-10-22.
-    # Keep the separate right-hand entry strict until explicitly overridden.
-    return requested or ('ignore-64-128' if hand == 'left' else 'stop')
+    # Exact raw 64/128 exceptions authorized for left on 2026-10-22 and
+    # paired right on 2026-11-05. Keep raw logs and reject combined codes.
+    return requested or 'ignore-64-128'
 
 
 def main(argv=None):
@@ -154,7 +154,7 @@ def main(argv=None):
     jog.add_argument('--slot', type=int, choices=(1, 16), default=1, help='1=食指根部；16=食指末端')
     jog.add_argument('--delta', type=int, default=-5, help='相对原始计数，绝对值 1..20，并非角度')
     jog.add_argument('--fault-policy', choices=('stop', 'ignore-128', 'ignore-64-128'),
-                     help='默认：左手忽略纯64/128（用户已确认），右手 stop；保留原始故障值')
+                     help='默认：左右手忽略单独64/128（用户已确认）；保留原始故障值')
     jog.add_argument('--execute', action='store_true')
     jog.add_argument('--return', dest='return_to_start', action='store_true')
     vision = sub.add_parser('vision', help='左手默认自动食指随动；--preview 仅视觉预览')
@@ -178,7 +178,7 @@ def main(argv=None):
     vision.add_argument('--preview', action='store_true', help='只预览，不启动实物控制')
     vision.add_argument('--manual', action='store_true', help='保留旧手动开启方式')
     automatic = sub.add_parser('_auto-vision', help=argparse.SUPPRESS)
-    automatic.add_argument('--hand', choices=('left',), required=True)
+    automatic.add_argument('--hand', choices=('left','right'), required=True)
     automatic.add_argument('--camera', default='0')
     automatic.add_argument('--retargeting',choices=('vector','dexpilot'),default='vector')
     automatic.add_argument('--thumb-axes',choices=('native','swapped'),default='native')
@@ -196,21 +196,21 @@ def main(argv=None):
             from auto_vision import run
             return run(args)
         if args.command == 'vision':
-            if args.retargeting=='dexpilot' and (args.hand!='left' or args.scope!='hand' or args.thumb_profile!='segments'):
-                raise ValueError('DexPilot 仅支持左手整手模式，不能叠加 palm 实验目标')
+            if args.retargeting=='dexpilot' and (args.scope!='hand' or args.thumb_profile!='segments'):
+                raise ValueError('DexPilot 仅支持整手模式，不能叠加 palm 实验目标')
             if args.thumb_profile!='segments' and (args.hand!='left' or args.scope!='hand'):
                 raise ValueError('拇指掌部位置约束只支持左手整手模式')
-            if args.thumb_axes!='native' and (args.hand!='left' or args.scope!='hand'):
-                raise ValueError('拇指交换对比只支持左手整手模式')
-            if args.scope == 'hand' and (args.hand != 'left' or args.manual or args.stream):
-                raise ValueError('整手模式仅支持左手；直接用 vision --scope hand 或加 --preview')
-            if args.hand == 'left' and not args.self_test and not args.preview and not args.manual:
-                command = [str(WORKSPACE / 'lh20'), '_auto-vision', '--hand', 'left', '--camera', args.camera,
+            if args.thumb_axes!='native' and args.scope!='hand':
+                raise ValueError('拇指交换对比只支持整手模式')
+            if args.scope == 'hand' and (args.manual or args.stream):
+                raise ValueError('整手模式请直接用 vision --scope hand 或加 --preview')
+            if (args.hand == 'left' or args.scope == 'hand') and not args.self_test and not args.preview and not args.manual:
+                command = [str(WORKSPACE / 'lh20'), '_auto-vision', '--hand', args.hand, '--camera', args.camera,
                            '--rotate-deg', *map(str, args.rotate_deg), '--scope', args.scope,'--thumb-axes',args.thumb_axes,
                            '--thumb-profile',args.thumb_profile,'--retargeting',args.retargeting,'--thumb-root-mode',args.thumb_root_mode]
                 if args.record:
                     command += ['--record', str(args.record.resolve())]
-                print('(lh20_vision) 左手自动随动：将启动或复用驱动及控制桥；Q 退出。', flush=True)
+                print(f'(lh20_vision) {args.hand} 自动随动：将启动或复用驱动及控制桥；Q 退出。', flush=True)
                 return os.execv(command[0], command)
             command, env = vision_command(args)
             print(f'视觉：{args.hand}，lh20_vision；仅预览模型角度，无电机输出。', flush=True)

@@ -6,9 +6,12 @@ case "${1:---help}" in
   -h|--help)
     echo "LH20 $hand 固定入口：vision | sdk | status | jog | teleop | check"
     echo "用法：$0 vision [--camera 0 | --self-test]"
+    echo "      $0 vision dexpilot  (DexPilot 整手重定向对比)"
+    echo "      $0 vision vector   (Vector 整手重定向)"
     echo "      $0 sdk | status | jog [--slot 1 --delta -5 --return [--execute]]"
-    echo "      $0 teleop [--span 20] [--execute]  (已验证左手食指根部随动)"
-    echo "右手 vision 仅预览；右手实时控制尚未通过本机实物验证。"
+    echo "      $0 teleop [--span 20] [--execute]  (旧食指模式；右手未作实机标定)"
+    echo "vision 默认右手整手 Vector + agile；使用右手独立模型与 swapped 通道；Q 退出。"
+    echo "vision --preview 只看模型和转换值；不输出电机目标。"
     exit 0 ;;
   vision|sdk|status|jog|teleop)
     for argument in "$@"; do
@@ -16,6 +19,18 @@ case "${1:---help}" in
         --hand|--hand=*) echo "此入口固定为 $hand；请使用另一个左右手入口。" >&2; exit 2 ;;
       esac
     done
+    if [[ "$1" == "vision" ]]; then
+      shift
+      if [[ "${1-}" == "dexpilot" ]]; then
+        shift
+        exec "$workspace_dir/lh20" vision --scope hand --thumb-axes swapped --thumb-profile segments --retargeting dexpilot "$@" --hand "$hand"
+      fi
+      if [[ "${1-}" == "vector" ]]; then
+        shift
+        exec "$workspace_dir/lh20" vision --scope hand --thumb-axes swapped --thumb-profile segments --retargeting vector "$@" --hand "$hand"
+      fi
+      exec "$workspace_dir/lh20" vision --scope hand --thumb-axes swapped --thumb-profile segments "$@" --hand "$hand"
+    fi
     exec "$workspace_dir/lh20" "$@" --hand "$hand" ;;
   *) exec "$workspace_dir/lh20" "$@" ;;
 esac

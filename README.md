@@ -1,20 +1,21 @@
-# LH20 左手视觉遥操
+# LH20 左右手视觉遥操
 
-Ubuntu 24.04 下的 **L20-10 / G20 左手**遥操初稿。普通 RGB 摄像头识别人手，通过 MediaPipe、dex-retargeting、ROS2 Jazzy 和 SocketCAN 驱动灵巧手，控制 16 个独立关节。
+Ubuntu 24.04 下的 **L20-10 / G20 左右手**遥操工程快照。普通 RGB 摄像头识别人手，通过 MediaPipe、dex-retargeting、ROS2 Jazzy 和 SocketCAN 驱动灵巧手，控制 16 个独立关节。
 
-**当前版本：0.1.0-draft（2026-10-22）。** 实机使用者已确认基本动作可用，拇指采用 **`swapped`**；尚无抓取成功率、延迟分布或角度精度的量化结果。厂家角度表不等于逐台设备测量标定。
+**当前快照：2026-11-05，开发中。** 左手已获使用者基本动作确认；右手新增独立模型、映射和控制链路，拇指现默认 `swapped`，但尚未完成方向和延迟验收。最近一次右手会话因 `Factory CAD worker response timeout` 停止，这是仍需修复的问题。厂家角度表不等于逐台设备测量标定，离线 CAD 耗时不等于实机端到端延迟。
 
 ## 已配置过环境的电脑怎么用
 
 现有实验电脑继续在原工程运行即可，公开副本不替换原工程：
 
 ```bash
-conda activate lh20_vision
 cd ~/linker_hand_ros2_sdk
-./lh20-left vision --scope hand --thumb-axes swapped
+./lh20-left vision
+# 接右手时使用下面这一行，左右手不要同时占用同一相机：
+./lh20-right vision
 ```
 
-窗口识别到物理左手后自动跟随；**Q 退出**。会自动启动或复用 ROS 驱动，不需要另外开 ROS 终端。退出停止新目标，不自动回原位。复用的已有 SDK 保持运行。
+窗口识别到对应侧物理人手后自动跟随；**Q 退出**。会自动启动或复用 ROS 驱动，不需要另外开 ROS 终端。退出停止新目标，不自动回原位。复用的已有 SDK 保持运行。
 
 ## 从此仓库开始
 
@@ -46,7 +47,7 @@ conda activate lh20_vision
 ./lh20-left vision
 ```
 
-此公开初稿的 `lh20-left vision` **默认 `--scope hand --thumb-axes swapped`**，可显式写出以便记录实验。底层原始 `lh20` 入口保留历史默认值，日常请用 `lh20-left`。
+左右手固定入口默认均为整手、Vector、agile、segments、swapped；无需附加参数。底层原始 `lh20` 入口保留历史默认值，日常使用 `lh20-left` / `lh20-right`。右手首次启动只读核验 CAN 0x27 的身份并写入本机登记，不使用左手登记文件。完整说明见 [右手遥操](docs/RIGHT_TELEOP.md) 和根目录命令速查 PDF。上传 GitHub、离线测试与模型自检不需要灵巧手上电。
 
 ## 常用命令
 
@@ -62,6 +63,9 @@ DexPilot 入口调用固定版本源码中的 `DexPilotOptimizer`，沿用现有
 | 环境与本机 ROS 自检，无硬件指令 | `./lh20-left check` | `(lh20_ros2)` |
 | 模型、优化器、关节约束离线自检 | `./lh20-left vision --self-test` | `(lh20_vision)` |
 | 摄像头识别与重定向预览，无电机输出 | `./lh20-left vision --preview` | `(lh20_vision)` |
+| 右手整手自动随动（开发中） | `./lh20-right vision` | 自动管理相应环境；已知 CAD 超时待修复 |
+| 右手仅视觉预览 | `./lh20-right vision --preview` | 无电机输出 |
+| 右手模型自检 | `./lh20-right vision --self-test` | 无相机或设备访问 |
 | 左手整手自动随动 | `./lh20-left vision` | `(lh20_vision)`，自动管理 `(lh20_ros2)` 子进程 |
 | 换摄像头 | `./lh20-left vision --camera 1` | `(lh20_vision)` |
 | 单独运行 SDK | `./lh20-left sdk` | `(lh20_ros2)`，Ctrl+C 停止 |
@@ -79,8 +83,8 @@ scripts/                   构建、身份登记、离线测试
 src/linkerhand-ros2-sdk/    厂家 ROS2 驱动的已修改源码及原许可证
 teleop/bridge/             自动会话、ROS 桥、映射、反馈与卡滞处理
 teleop/vision/             摄像头、重定向、CAD 检查
-teleop/config/             厂家左手转换表、向量重定向配置
-teleop/models/             必要的左手 URDF / STL 网格和许可证
+teleop/config/             厂家左右手转换表、向量重定向配置
+teleop/models/             必要的左右手 URDF / STL 网格和许可证
 teleop/reference/          厂家转换函数的纯计算导出、来源与许可证
 teleop/tests/              无硬件回归测试
 teleop/dex-retargeting/    固定版本的上游 Git 子模块

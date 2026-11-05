@@ -16,7 +16,7 @@ ROOT_GUIDE_PARAMETERS = {
 }
 
 
-def root_gesture_targets(points, limits):
+def root_gesture_targets(points, limits, hand="left"):
     """Palm-frame metacarpal angles and MCP bend, adapted to the LH20 axes.
 
     This is an anatomical command guide, not measured human/robot calibration.
@@ -26,6 +26,11 @@ def root_gesture_targets(points, limits):
     points = np.asarray(points, dtype=float)
     if points.shape != (21, 3) or not np.isfinite(points).all():
         raise ValueError('Expected 21 finite palm-frame landmarks')
+    if hand not in ('left','right'):raise ValueError('Unknown hand side')
+    # Detector MANO frames differ by diag(-1,-1,1). Express right root
+    # gestures in the left guide convention; the direction objective still
+    # uses untouched right-frame landmarks and the independent right model.
+    if hand=='right':points=points*np.array([-1.,-1.,1.])
     bones = np.diff(points[1:4], axis=0)
     lengths = np.linalg.norm(bones, axis=1)
     if np.any(lengths < .003):raise ValueError('Collapsed thumb root observation')
@@ -40,7 +45,7 @@ def root_gesture_targets(points, limits):
 
 
 class ThumbResponsiveOptimizer(VectorOptimizer):
-    def __init__(self, original, limits):
+    def __init__(self, original, limits, hand="left"):
         super().__init__(
             original.robot, original.target_joint_names,
             original.origin_link_names, original.task_link_names,
@@ -48,6 +53,7 @@ class ThumbResponsiveOptimizer(VectorOptimizer):
             norm_delta=original.norm_delta,
             scaling=original.scaling,
         )
+        self.hand=hand
         self.set_kinematic_adaptor(original.adaptor)
         self.set_joint_limit(limits, epsilon=0.)
         self.thumb_joints = np.array([
@@ -84,7 +90,7 @@ class ThumbResponsiveOptimizer(VectorOptimizer):
 
     def set_root_reference(self, points):
         self.pending_root_guide = None
-        self.pending_root_guide = root_gesture_targets(points, self.thumb_limits)
+        self.pending_root_guide = root_gesture_targets(points, self.thumb_limits, self.hand)
         return self.pending_root_guide.copy()
 
     def thumb_objective(self, target_vector, fixed_qpos, last_qpos, root_guide=None):

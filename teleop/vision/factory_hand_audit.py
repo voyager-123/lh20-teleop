@@ -13,11 +13,60 @@ from collision_check import CollisionChecker
 
 
 class FactoryAudit:
-    def __init__(self,thumb_axes="native"):
-        self.mapping=FactoryMapping(thumb_axes)
+    def __init__(self,thumb_axes="native",hand="left",use_broadphase=True):
+        self.mapping=FactoryMapping(thumb_axes,hand=hand)
         self.checker=CollisionChecker(self.mapping.model_path)
         self.cache=OrderedDict()
         self.pair_cache=OrderedDict()
+        self.use_broadphase=use_broadphase
+        # Bounds come from the loaded collision geometry (including mesh scale),
+        # not the visual mesh. A transformed local box encloses every triangle.
+        lower=[];upper=[]
+        for obj in self.checker.geometry.geometryObjects:
+            obj.geometry.computeLocalAABB()
+            lower.append(np.array(obj.geometry.aabb_local.min_,copy=True))
+            upper.append(np.array(obj.geometry.aabb_local.max_,copy=True))
+        lower,upper=np.array(lower),np.array(upper)
+        self.box_centers=lower/2+upper/2
+        self.box_extents=upper/2-lower/2
+        self.boxes_valid=bool(np.isfinite(lower).all() and np.isfinite(upper).all() and (upper>=lower).all())
+        self.pair_first=np.array([p.first for p in self.checker.geometry.collisionPairs])
+        self.pair_second=np.array([p.second for p in self.checker.geometry.collisionPairs])
+
+    def overlapping_pairs(self):
+        """Conservative broadphase only; every surviving pair uses exact meshes."""
+        c=self.checker
+        # A positive query margin could collide even with disjoint mesh bounds.
+        # Preserve arbitrary request semantics by falling back to all pairs.
+        if not self.use_broadphase or not self.boxes_valid or any(r.security_margin!=0 for r in c.gdata.collisionRequests):
+            return range(len(c.geometry.collisionPairs))
+        rotations=np.array([p.rotation for p in c.gdata.oMg])
+        translations=np.array([p.translation for p in c.gdata.oMg])
+        centers=np.einsum('nij,nj->ni',rotations,self.box_centers)+translations
+        extents=np.einsum('nij,nj->ni',np.abs(rotations),self.box_extents)+1e-9
+        lower,upper=centers-extents,centers+extents
+        a,b=self.pair_first,self.pair_second
+        overlaps=np.all(lower[a]<=upper[b],axis=1)&np.all(lower[b]<=upper[a],axis=1)
+        return np.flatnonzero(overlaps).tolist()
+
+    def pair_result(self,index,detailed):
+        c=self.checker
+        request=c.gdata.collisionRequests[index]
+        request.enable_contact=True
+        cap=4096 if detailed else 1
+        while True:
+            request.num_max_contacts=cap
+            collision=pin.computeCollision(c.geometry,c.gdata,index)
+            if not collision or not detailed:return collision,None,True
+            result=c.gdata.collisionResults[index]
+            # A saturated mesh query is truncated, even when its current
+            # maximum depth looks valid. Retry before caching any metrics.
+            if result.numContacts()>=cap and cap<65536:
+                cap*=2
+                continue
+            depths=[float(contact.penetration_depth) for contact in result.getContacts()]
+            known=bool(depths) and result.numContacts()<cap and all(np.isfinite(d) and d>=0 for d in depths)
+            return collision,max(depths) if known else None,known
 
     def snapshot(self,q,detailed=False):
         key=(detailed,tuple(q))
@@ -28,7 +77,8 @@ class FactoryAudit:
         pin.updateGeometryPlacements(c.model,c.data,c.geometry,c.gdata,q)
         placements=[pose.homogeneous.tobytes() for pose in c.gdata.oMg]
         hits=[];depths={};complete=True
-        for index,(pair,kind) in enumerate(zip(c.geometry.collisionPairs,c.kinds)):
+        for index in self.overlapping_pairs():
+            pair,kind=c.geometry.collisionPairs[index],c.kinds[index]
             # Unchanged geometry pairs have identical contacts. Reuse their exact
             # result, so holding three fingers does not redo expensive mesh work.
             pair_key=(detailed,index,placements[pair.first],placements[pair.second])
@@ -36,18 +86,7 @@ class FactoryAudit:
                 self.pair_cache.move_to_end(pair_key)
                 collision,depth,known=self.pair_cache[pair_key]
             else:
-                request=c.gdata.collisionRequests[index]
-                request.enable_contact=True
-                request.num_max_contacts=4096 if detailed else 1
-                collision=pin.computeCollision(c.geometry,c.gdata,index)
-                depth=None;known=True
-                if collision and detailed:
-                    result=c.gdata.collisionResults[index]
-                    contacts=result.getContacts()
-                    known=bool(contacts) and result.numContacts()<4096
-                    if known:
-                        depth=max(float(contact.penetration_depth) for contact in contacts)
-                        known=bool(np.isfinite(depth) and depth>=0)
+                collision,depth,known=self.pair_result(index,detailed)
                 self.pair_cache[pair_key]=(collision,depth,known)
                 if len(self.pair_cache)>4096:self.pair_cache.popitem(last=False)
             if collision:
@@ -120,8 +159,8 @@ class FactoryAudit:
                 'feedback_hold_slots':[i for i in range(20) if partial[i]!=requested[i] and partial[i]!=hold[i]]}
 
 
-def worker(thumb_axes="native"):
-    audit=FactoryAudit(thumb_axes)
+def worker(thumb_axes="native",hand="left"):
+    audit=FactoryAudit(thumb_axes,hand)
     print(json.dumps({'ready':True,'profile_sha256':audit.mapping.sha256,'model_sha256':audit.mapping.model_hash}),flush=True)
     for line in sys.stdin:
         try:
@@ -134,8 +173,8 @@ def worker(thumb_axes="native"):
 
 
 if __name__=='__main__':
-    p=argparse.ArgumentParser(description=__doc__);p.add_argument('--worker',action='store_true');p.add_argument('--thumb-axes',choices=('native','swapped'),default='native');a=p.parse_args()
+    p=argparse.ArgumentParser(description=__doc__);p.add_argument('--worker',action='store_true');p.add_argument('--hand',choices=('left','right'),default='left');p.add_argument('--thumb-axes',choices=('native','swapped'),default='native');a=p.parse_args()
     try:
-        if a.worker:worker(a.thumb_axes)
+        if a.worker:worker(a.thumb_axes,a.hand)
     except KeyboardInterrupt:
         pass
