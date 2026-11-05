@@ -122,7 +122,10 @@ class FactoryHandTests(unittest.TestCase):
                 with self.assertRaises(SystemExit):lh20_cli.main(['vision','--hand','left','--scope','hand',*extra])
                 cmd=execute.call_args.args[1]
                 self.assertEqual(cmd[cmd.index('--scope')+1],'hand')
-        self.assertEqual(lh20_cli.main(['vision','--hand','right','--scope','hand']),1)
+        with patch.object(lh20_cli.os,'execv',side_effect=SystemExit(0)) as execute:
+            with self.assertRaises(SystemExit):lh20_cli.main(['vision','--hand','right','--scope','hand'])
+            command=execute.call_args.args[1]
+            self.assertEqual(command[command.index('--hand')+1],'right')
         self.assertEqual(lh20_cli.main(['vision','--hand','left','--scope','hand','--stream']),1)
 
     def test_existing_actual_left_pose_is_in_factory_limits(self):

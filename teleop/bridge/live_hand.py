@@ -25,12 +25,13 @@ class HandController:
         if algorithm not in ('vector','dexpilot'):raise ValueError('Unknown retargeting algorithm')
         self.algorithm=algorithm
         self.mapping=mapping or FactoryMapping()
+        self.hand=self.mapping.hand
         self.last_command=validate_positions(baseline)
         for i in (11,12,13,14):self.last_command[i]=255
         self.mapping.encode(self.mapping.decode(self.last_command))  # Reject out-of-model starting poses.
         self.desired=self.last_command.copy()
         self.active=False
-        self.state='WAITING_FOR_LEFT_HAND'
+        self.state=f'WAITING_FOR_{self.hand.upper()}_HAND'
         self.session=None
         self.seq=-1
         self.epoch=None
@@ -50,8 +51,8 @@ class HandController:
 
     def accept(self,p,now):
         try:
-            if not isinstance(p,dict) or p.get('schema')!='lh20.retarget.v1' or p.get('hand')!='left' or \
-                    p.get('scope')!='hand' or p.get('model')!=MODEL_ID or \
+            if not isinstance(p,dict) or p.get('schema')!='lh20.retarget.v1' or p.get('hand')!=self.hand or \
+                    p.get('scope')!='hand' or p.get('model')!=self.mapping.model_id or \
                     p.get('model_sha256')!=self.mapping.model_hash or p.get('source_commit')!=SOURCE_COMMIT or p.get('thumb_axes','native')!=self.mapping.thumb_axes:
                 raise ValueError('Wrong side/model/source/scope')
             if p.get('retargeting_algorithm','vector')!=self.algorithm:
@@ -63,7 +64,7 @@ class HandController:
             if type(stamp) is not int or not -.02<=now-stamp/1e9<=.25:
                 raise ValueError('Stale/future vision frame')
             if session!=self.session:
-                self.pause('NEW_LEFT_VISION_SESSION');self.session=session;self.seq=-1;self.epoch=epoch
+                self.pause(f'NEW_{self.hand.upper()}_VISION_SESSION');self.session=session;self.seq=-1;self.epoch=epoch
             if seq<=self.seq:raise ValueError('Duplicate/out-of-order vision frame')
             self.seq=seq
             if self.epoch!=epoch:
@@ -79,7 +80,7 @@ class HandController:
             # fingers. Legacy streams retain their endpoint rejection policy.
             if not p['valid'] or not p['operator_enabled'] or p.get('auto_follow') is not True or \
                     (p.get('cad_collision_hits') and cad_policy != BRIDGE_PATH_POLICY):
-                self.pause('WAITING_FOR_VALID_LEFT_HAND');return
+                self.pause(f'WAITING_FOR_VALID_{self.hand.upper()}_HAND');return
             names,angles=p.get('joint_names'),p.get('position_rad')
             if not isinstance(names,list) or not isinstance(angles,list) or len(names)!=16 or len(angles)!=16 or \
                     any(not isinstance(n,str) for n in names) or len(set(names))!=16 or set(names)!=set(self.mapping.joints):
@@ -90,15 +91,15 @@ class HandController:
             self.last_input=stamp/1e9
             self.samples.append(stamp/1e9)
             if not self.active and (len(self.samples)<3 or self.samples[-1]-self.samples[0]<.06):
-                self.active=False;self.state='DETECTING_LEFT_HAND';return
-            self.desired=desired;self.active=True;self.state='AUTO_FOLLOWING_FACTORY_LEFT_HAND'
+                self.active=False;self.state=f'DETECTING_{self.hand.upper()}_HAND';return
+            self.desired=desired;self.active=True;self.state=f'AUTO_FOLLOWING_FACTORY_{self.hand.upper()}_HAND'
             self.thumb_profile=p.get('thumb_profile','segments')
             self.retargeting_config_sha256=p.get('retargeting_config_sha256')
         except (ValueError,KeyError,TypeError) as e:
             self.pause('REJECTED_FRAME: '+str(e))
 
     def candidate(self,now,desired_override=None):
-        if now-self.last_input>.25:self.pause('WAITING_FOR_LEFT_HAND')
+        if now-self.last_input>.25:self.pause(f'WAITING_FOR_{self.hand.upper()}_HAND')
         if not self.active:return None
         elapsed=1/30 if not math.isfinite(self.last_step) else now-self.last_step
         if elapsed<1/30:return None
@@ -122,14 +123,14 @@ class HandController:
 
 
 class CadWorker:
-    def __init__(self,thumb_axes='native'):
+    def __init__(self,thumb_axes='native',hand='left'):
         python=resolve_vision_python()
-        self.process=subprocess.Popen([str(python),'-E','-s','-u',str(ROOT/'vision/factory_hand_audit.py'),'--worker','--thumb-axes',thumb_axes],
+        self.process=subprocess.Popen([str(python),'-E','-s','-u',str(ROOT/'vision/factory_hand_audit.py'),'--worker','--thumb-axes',thumb_axes,'--hand',hand],
                                       stdin=subprocess.PIPE,stdout=subprocess.PIPE,text=True,bufsize=1,
                                       env=vision_subprocess_env(python))
         try:
             ready=self.read(15)
-            m=FactoryMapping(thumb_axes)
+            m=FactoryMapping(thumb_axes,hand=hand)
             if ready.get('ready') is not True or ready.get('profile_sha256')!=m.sha256 or ready.get('model_sha256')!=m.model_hash:
                 raise RuntimeError('Factory CAD worker/model mismatch')
         except BaseException:
@@ -161,18 +162,18 @@ class CadWorker:
 
 
 def run(args):
-    if args.hand!='left' or not args.auto_follow:raise ValueError('Use the automatic left full-hand entry')
+    if args.hand not in ('left','right') or not args.auto_follow:raise ValueError('Use the automatic full-hand entry')
     if not 1<=args.duration<=3600:raise ValueError('Invalid duration')
-    mapping=FactoryMapping(getattr(args,'thumb_axes','native'))
+    mapping=FactoryMapping(getattr(args,'thumb_axes','native'),hand=args.hand)
     import rclpy
     from sensor_msgs.msg import JointState
     from std_msgs.msg import String
-    rclpy.init();node=rclpy.create_node('lh20_left_factory_hand')
-    topics=topic_names('left')
+    rclpy.init();node=rclpy.create_node(f'lh20_{args.hand}_factory_hand')
+    topics=topic_names(args.hand)
     latest={'q':None,'state_at':0.,'info':None,'info_at':0.}
     recent=deque(maxlen=5)
     publisher=receiver=cad=None
-    path=ROOT/'data'/f'live_hand_{time.time_ns()}.jsonl';path.parent.mkdir(exist_ok=True)
+    path=ROOT/'data'/f"live_hand_{'right_' if args.hand=='right' else ''}{time.time_ns()}.jsonl";path.parent.mkdir(exist_ok=True)
     log=path.open('x');last_fault=None
     def record(kind,**values):
         log.write(json.dumps({'kind':kind,'monotonic':time.monotonic(),**values},allow_nan=False)+'\n');log.flush()
@@ -202,16 +203,16 @@ def run(args):
             raise RuntimeError('Expected exactly one SDK full-hand subscriber')
     subs=[node.create_subscription(JointState,topics['state'],state,1),node.create_subscription(String,topics['info'],info,1)]
     try:
-        print('(lh20_ros2) 等待左手稳定反馈；准备厂家整手映射与 CAD 检查。',flush=True)
+        print(f'(lh20_ros2) 等待 {args.hand} 稳定反馈；准备独立映射与 CAD 检查。',flush=True)
         end=time.monotonic()+10
         while time.monotonic()<end:
             rclpy.spin_once(node,timeout_sec=.05)
             if len(recent)==5 and all(max(q[i] for q in recent)-min(q[i] for q in recent)<=2 for i in ACTIVE) and not feedback_errors(latest,time.monotonic(),ignore_128=args.fault_policy in ('ignore-128','ignore-64-128'),ignore_64=args.fault_policy=='ignore-64-128'):break
-        else:raise RuntimeError('No stable fresh left-hand feedback')
+        else:raise RuntimeError(f'No stable fresh {args.hand}-hand feedback')
         guard()
         engine=HandController(latest['q'],mapping,getattr(args,'retargeting','vector'))
         governor=LatencyAwareGovernor(mapping,isolate_stalls=True)
-        cad=CadWorker(mapping.thumb_axes)
+        cad=CadWorker(mapping.thumb_axes,hand=args.hand)
         initial=cad.check(engine.last_command,engine.last_command)
         if not initial['ok']:raise RuntimeError('Starting pose failed factory model check: '+json.dumps(initial))
         if initial.get('recovery_from_existing_collision'):
@@ -231,12 +232,12 @@ def run(args):
             end=time.monotonic()+3
             while publisher.get_subscription_count()==0 and time.monotonic()<end:rclpy.spin_once(node,timeout_sec=.05)
         guard()
-        receiver=VisionReceiver(args.socket or default_socket('left'))
-        record('start',execute=args.execute,baseline=engine.last_command,profile_sha256=mapping.sha256,
+        receiver=VisionReceiver(args.socket or default_socket(args.hand))
+        record('start',hand=args.hand,execute=args.execute,baseline=engine.last_command,profile_sha256=mapping.sha256,
                model_sha256=mapping.model_hash,source=mapping.profile['source'],fault_policy=args.fault_policy,
                thumb_axes=mapping.thumb_axes,tracking_stall_action='hold_affected_joint',
                retargeting_algorithm=engine.algorithm,
-               mapping='manufacturer_left_g20_native_model',physical_angle_calibration=False,
+               mapping=f'manufacturer_{args.hand}_g20_model',physical_angle_calibration=False,
                feedback_pacing={'mode':'latency_aware','max_lead_by_slot':governor.lead_limits,
                                 'history_seconds':governor.latency_seconds,'stall_seconds':governor.stall_seconds},
                ignored_fault_codes=[64,128] if args.fault_policy=='ignore-64-128' else [128] if args.fault_policy=='ignore-128' else [],
@@ -288,7 +289,7 @@ def run(args):
                         print('(lh20_ros2) '+('CAD 暂停接触相关手指：'+', '.join(held_fingers)+'；其余手指继续随动。' if held_fingers else 'CAD 接触限制解除，恢复整手随动。'),flush=True)
                     rclpy.spin_once(node,timeout_sec=0.);guard()
                     now=time.monotonic()
-                    if now-engine.last_input>.25:engine.pause('WAITING_FOR_LEFT_HAND')
+                    if now-engine.last_input>.25:engine.pause(f'WAITING_FOR_{args.hand.upper()}_HAND')
                     elif any(abs(latest['q'][i]-observed[i])>2 for i in ACTIVE):
                         record('cad_feedback_changed',before=observed,after=latest['q'],cad_ms=cad_ms)
                         engine.recheck_feedback()
@@ -323,7 +324,7 @@ def run(args):
 
 def main():
     p=argparse.ArgumentParser(description=__doc__)
-    p.add_argument('--hand',choices=('left',),required=True);p.add_argument('--auto-follow',action='store_true')
+    p.add_argument('--hand',choices=('left','right'),required=True);p.add_argument('--auto-follow',action='store_true')
     p.add_argument('--execute',action='store_true');p.add_argument('--duration',type=float,default=3600)
     p.add_argument('--thumb-axes',choices=('native','swapped'),default='native')
     p.add_argument('--retargeting',choices=('vector','dexpilot'),default='vector')

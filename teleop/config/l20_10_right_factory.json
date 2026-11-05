@@ -1,0 +1,349 @@
+{
+  "schema": "lh20.factory_mapping.v1",
+  "hand": "right",
+  "hand_joint": "L20-10",
+  "firmware_version": [
+    1,
+    0,
+    6
+  ],
+  "urdf_sha256": "154b6751f9ae1ff622468d5f5e23b1cc17a490fbecc340dc69307fd4cfe0a612",
+  "measured_on_hardware": false,
+  "source": {
+    "repository": "https://github.com/linker-bot/linkerhand-cpp-sdk",
+    "commit": "948da97ce591dc85cebcfc761463dec31ffd30a9",
+    "sdk_version": "2.2.0",
+    "library": "lib/linux/x86_64/linkerhand_cpp_sdk.so.2.2.0",
+    "library_sha256": "dde9258906ad3c70fb0afc66eccad5f4ed4b02b01c51161cb6e9d04c34318d5d",
+    "conversion": "range_to_arc(LINKER_HAND::L20_10, HAND_TYPE::RIGHT, raw16)",
+    "enum_evidence": "include/core/Common.h: L20_10 = G20; RIGHT=0x27",
+    "cpp_active_order_to_ros20": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      15,
+      16,
+      17,
+      18,
+      19
+    ],
+    "offline_method": "Pure exported conversion only; no hand object/CAN callbacks; real libcanbus replaced by empty stub",
+    "firmware_scope": "Expected runtime firmware 1.0.6; vendor conversion table has no per-firmware qualification"
+  },
+  "measurement_notes": "厂家G20原生角度表 + 独立记录的SDK到本URDF坐标适配。四指MCP侧摆取反；来自GUI扇形张手观察和故障现场CAD重建，不冒充厂家原始符号或本机逐轴实测标定。",
+  "joints": {
+    "thumb_cmc_pitch": {
+      "slot": 0,
+      "anchors": [
+        [
+          0,
+          255
+        ],
+        [
+          0.34862745098039216,
+          128
+        ],
+        [
+          0.7,
+          0
+        ]
+      ]
+    },
+    "thumb_cmc_roll": {
+      "slot": 5,
+      "anchors": [
+        [
+          0,
+          255
+        ],
+        [
+          0.781921568627451,
+          128
+        ],
+        [
+          1.57,
+          0
+        ]
+      ]
+    },
+    "thumb_cmc_yaw": {
+      "slot": 10,
+      "anchors": [
+        [
+          0,
+          255
+        ],
+        [
+          0.722156862745098,
+          128
+        ],
+        [
+          1.45,
+          0
+        ]
+      ]
+    },
+    "thumb_mcp": {
+      "slot": 15,
+      "anchors": [
+        [
+          0,
+          255
+        ],
+        [
+          0.6225490196078431,
+          128
+        ],
+        [
+          1.25,
+          0
+        ]
+      ]
+    },
+    "index_mcp_pitch": {
+      "slot": 1,
+      "anchors": [
+        [
+          0,
+          255
+        ],
+        [
+          0.6076078431372549,
+          128
+        ],
+        [
+          1.22,
+          0
+        ]
+      ]
+    },
+    "index_mcp_roll": {
+      "slot": 6,
+      "anchors": [
+        [
+          -0.23,
+          255
+        ],
+        [
+          -0.0009019607843137323,
+          128
+        ],
+        [
+          0.23,
+          0
+        ]
+      ]
+    },
+    "index_pip": {
+      "slot": 16,
+      "anchors": [
+        [
+          0,
+          255
+        ],
+        [
+          0.996078431372549,
+          128
+        ],
+        [
+          2,
+          0
+        ]
+      ]
+    },
+    "middle_mcp_pitch": {
+      "slot": 2,
+      "anchors": [
+        [
+          0,
+          255
+        ],
+        [
+          0.6076078431372549,
+          128
+        ],
+        [
+          1.22,
+          0
+        ]
+      ]
+    },
+    "middle_mcp_roll": {
+      "slot": 7,
+      "anchors": [
+        [
+          -0.23,
+          255
+        ],
+        [
+          -0.0009019607843137323,
+          128
+        ],
+        [
+          0.23,
+          0
+        ]
+      ]
+    },
+    "middle_pip": {
+      "slot": 17,
+      "anchors": [
+        [
+          0,
+          255
+        ],
+        [
+          0.996078431372549,
+          128
+        ],
+        [
+          2,
+          0
+        ]
+      ]
+    },
+    "ring_mcp_pitch": {
+      "slot": 3,
+      "anchors": [
+        [
+          0,
+          255
+        ],
+        [
+          0.6076078431372549,
+          128
+        ],
+        [
+          1.22,
+          0
+        ]
+      ]
+    },
+    "ring_mcp_roll": {
+      "slot": 8,
+      "anchors": [
+        [
+          -0.23,
+          255
+        ],
+        [
+          -0.0009019607843137323,
+          128
+        ],
+        [
+          0.23,
+          0
+        ]
+      ]
+    },
+    "ring_pip": {
+      "slot": 18,
+      "anchors": [
+        [
+          0,
+          255
+        ],
+        [
+          0.996078431372549,
+          128
+        ],
+        [
+          2,
+          0
+        ]
+      ]
+    },
+    "pinky_mcp_pitch": {
+      "slot": 4,
+      "anchors": [
+        [
+          0,
+          255
+        ],
+        [
+          0.6076078431372549,
+          128
+        ],
+        [
+          1.22,
+          0
+        ]
+      ]
+    },
+    "pinky_mcp_roll": {
+      "slot": 9,
+      "anchors": [
+        [
+          -0.23,
+          255
+        ],
+        [
+          -0.0009019607843137323,
+          128
+        ],
+        [
+          0.23,
+          0
+        ]
+      ]
+    },
+    "pinky_pip": {
+      "slot": 19,
+      "anchors": [
+        [
+          0,
+          255
+        ],
+        [
+          0.996078431372549,
+          128
+        ],
+        [
+          2,
+          0
+        ]
+      ]
+    }
+  },
+  "parent_vendor_profile_sha256": "d3e6330fa415780812bd4b8b355954c8f42556e6f8110c13553b584009d7e7ce",
+  "model_coordinate_adapter": {
+    "sdk_to_urdf_sign": {
+      "index_mcp_roll": -1,
+      "middle_mcp_roll": -1,
+      "ring_mcp_roll": -1,
+      "pinky_mcp_roll": -1
+    },
+    "basis": "Derived coordinate adapter, not manufacturer original table: operator confirmed GUI open is a fan; current URDF +X roll requires opposite SDK sign.",
+    "checks": [
+      "GUI open and saved starting pose become CAD-clear",
+      "Old slot6=64 target and feedback reproduce index-middle collisions"
+    ],
+    "hardware_validation": "Operator observations plus log/CAD reconstruction; no new hardware commands or per-joint angle measurements by agent",
+    "fault_log_sha256": "cdf5e371d82205663651ad7a6a60016ef77b264f25debacb00a29ba5dc375de7"
+  },
+  "model": "models/l20_10_right/linkerhand_l20_10_right.urdf",
+  "coordinate_basis": "Right L20 model with recorded right G20-to-model MCP roll sign adapter; intersect factory and model limits",
+  "model_range_adapter": {
+    "date": "2026-11-05",
+    "joints": [
+      "index_mcp_roll",
+      "middle_mcp_roll",
+      "ring_mcp_roll",
+      "pinky_mcp_roll"
+    ],
+    "bounds_rad": [
+      -0.23,
+      0.23
+    ],
+    "basis": "RIGHT G20 manufacturer range_to_arc endpoints, not older L20 ±0.17 limits. Geometry and MCP roll coordinate signs retained; operator spread pose has no CAD contacts.",
+    "hardware_angle_calibration": false
+  }
+}

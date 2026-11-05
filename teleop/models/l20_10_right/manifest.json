@@ -1,0 +1,16 @@
+{
+  "source_urdf": "linkerhand-urdf/L20/right/linkerhand_l20_right.urdf",
+  "source_sha256": "171c28116fe6f1e7b885fd5cf046044c4367c7d0b8036ab4743946cc8e619b9a",
+  "changes": [
+    "2026-11-05: four non-thumb MCP roll bounds ±0.17 -> ±0.23 rad, matching audited RIGHT G20 manufacturer conversion endpoints. Geometry, origins, axes, mimic, speeds and efforts unchanged."
+  ],
+  "factory_native_axes": false,
+  "hardware_alignment_measured": false,
+  "coordinate_profile": "l20_10_right_factory.json",
+  "range_evidence": {
+    "vendor_conversion_profile": "l20_right_vendor_g20.json",
+    "parent_vendor_profile_sha256": "d3e6330fa415780812bd4b8b355954c8f42556e6f8110c13553b584009d7e7ce",
+    "hardware_observation": "Right L20-10 right (local identity omitted) firmware 1.0.6; operator reported spread fingers, raw MCP rolls [254,168,5,0], no faults. Not an angle calibration or full-range motion test."
+  },
+  "derived_urdf_sha256": "154b6751f9ae1ff622468d5f5e23b1cc17a490fbecc340dc69307fd4cfe0a612"
+}

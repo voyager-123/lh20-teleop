@@ -31,16 +31,14 @@ def load_retargeting(hand="right", scope="index", thumb_axes="native", thumb_pro
     sys.path.insert(0, str(SOURCE))
     from dex_retargeting.retargeting_config import RetargetingConfig
 
-    if scope == "hand" and hand != "left":
-        raise ValueError("Factory full-hand mode is available only for left L20-10")
-    if algorithm not in ('vector','dexpilot') or algorithm=='dexpilot' and (hand!='left' or scope!='hand' or thumb_profile!='segments'):
-        raise ValueError('DexPilot requires left full-hand mode without palm experiment')
+    if algorithm not in ('vector','dexpilot') or algorithm=='dexpilot' and (scope!='hand' or thumb_profile!='segments'):
+        raise ValueError('DexPilot requires full-hand mode without palm experiment')
     if thumb_profile not in ('segments','palm') or thumb_profile!='segments' and (hand!='left' or scope!='hand'):
         raise ValueError('Palm thumb profile requires left full-hand mode')
     RetargetingConfig.set_default_urdf_dir(ROOT if scope == "hand" else ROOT / "linkerhand-urdf")
-    config_path=ROOT / ("config/l20_10_left_dexpilot.yaml" if algorithm=='dexpilot' else
+    config_path=ROOT / (f"config/l20_10_{hand}_dexpilot.yaml" if algorithm=='dexpilot' else
                         "config/l20_10_left_vector_palm.yaml" if scope=='hand' and thumb_profile=='palm' else
-                        "config/l20_10_left_vector.yaml" if scope == "hand" else f"config/l20_{hand}_vector.yaml")
+                        f"config/l20_10_{hand}_vector.yaml" if scope == "hand" else f"config/l20_{hand}_vector.yaml")
     config = RetargetingConfig.load_from_file(config_path)
     physical_model=Path(config.urdf_path)
     model_temp=None;tip_metadata=None
@@ -71,13 +69,13 @@ def load_retargeting(hand="right", scope="index", thumb_axes="native", thumb_pro
     retargeting.lh20_limit_basis = "urdf_only_unverified_hardware_mapping"
     if scope == "hand":
         from factory_mapping import FactoryMapping
-        mapping = FactoryMapping(thumb_axes)
+        mapping = FactoryMapping(thumb_axes,hand=hand)
         retargeting.lh20_factory_mapping = mapping
         for index, name in enumerate(config.target_joint_names):
             retargeting.joint_limits[index] = mapping.limits[name]
         retargeting.lh20_limit_profile_sha256 = mapping.sha256
-        retargeting.lh20_limit_basis = "manufacturer_left_g20_native_model"
-    if hand == "right":
+        retargeting.lh20_limit_basis = ("manufacturer_left_g20_native_model" if hand=="left" else "right_vendor_g20_model_adapter")
+    if hand == "right" and scope != "hand":
         # The migrated vendor profile is right-specific. Never apply it to left.
         from measured_mapping import load_profile
         robot_limits = retargeting.optimizer.robot.joint_limits
@@ -93,7 +91,7 @@ def load_retargeting(hand="right", scope="index", thumb_axes="native", thumb_pro
         retargeting.lh20_limit_basis = "urdf_intersect_right_vendor_g20"
     if vector_tip:
         from thumb_refinement import ThumbResponsiveOptimizer
-        retargeting.optimizer = ThumbResponsiveOptimizer(retargeting.optimizer, retargeting.joint_limits)
+        retargeting.optimizer = ThumbResponsiveOptimizer(retargeting.optimizer, retargeting.joint_limits, hand=hand)
         if thumb_root_mode=='directions':retargeting.optimizer.root_guide_weight=0.
     # The upstream optimizer expands limits by 0.001 rad. Use exact model bounds.
     retargeting.optimizer.opt.set_lower_bounds(retargeting.joint_limits[:, 0])
@@ -128,7 +126,16 @@ def self_test(hand="right", scope="index", thumb_axes="native", thumb_profile="s
     for fraction in (0.05, 0.45, 0.85):
         config, retargeting = load_retargeting(hand, scope, thumb_axes,thumb_profile,algorithm,thumb_root_mode)
         robot = retargeting.optimizer.robot
+        if algorithm=='dexpilot':
+            # FK-generated references test model fitting, not intentional pinch
+            # projection. Projection changes nearby tip targets by design and
+            # is covered separately; runtime config and hysteresis stay intact.
+            retargeting.optimizer.project_dist=0.
+            retargeting.optimizer.escape_dist=0.
+            print('Model fit self-test: pinch projection disabled; runtime policy unchanged.')
         qref = robot.joint_limits[:, 0] + fraction * np.ptp(robot.joint_limits, axis=1)
+        qref[retargeting.optimizer.idx_pin2target] = (retargeting.joint_limits[:,0]
+            + fraction*np.ptp(retargeting.joint_limits,axis=1))
         qref = retargeting.optimizer.adaptor.forward_qpos(qref)
         target = model_vectors(config, retargeting, qref)
         initial = retargeting.get_qpos()
@@ -340,7 +347,7 @@ def run_camera(args):
                 online = sender.send(packet)
                 stream_status = ("STREAM ONLINE" if online else "BRIDGE OFFLINE") + (" / ENABLED" if operator_enabled else " / PAUSED")
                 cv2.putText(frame, stream_status, (10, 440), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 220, 255), 1)
-                cv2.putText(frame, ("AUTO LEFT FULL HAND | Q quit" if mapping is not None else "AUTO LEFT INDEX | Q quit") if args.auto_follow else "SPACE toggle | S pause | C recenter | Q quit", (10, 465),
+                cv2.putText(frame, (f"AUTO {args.hand.upper()} FULL HAND | Q quit" if mapping is not None else f"AUTO {args.hand.upper()} INDEX | Q quit") if args.auto_follow else "SPACE toggle | S pause | C recenter | Q quit", (10, 465),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.43, (0, 220, 255), 1)
             # The target reaches the bridge before model drawing / disk IO.
             stage=time.monotonic_ns()

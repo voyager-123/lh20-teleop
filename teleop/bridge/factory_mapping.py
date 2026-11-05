@@ -1,4 +1,4 @@
-"""Pinned LEFT L20-10 factory conversion; pure arithmetic, no device access."""
+"""Side-specific L20-10 factory/model conversion; no device access."""
 import hashlib
 import json
 import math
@@ -10,25 +10,31 @@ from measured_mapping import interpolate
 
 ROOT = Path(__file__).resolve().parents[1]
 PROFILE_SHA256 = '5bb3f16ed735dfda8f5d52e01429f25044e200d7e858839bd15838843bf9d123'
+RIGHT_PROFILE_SHA256 = 'cbbd4c983cf73ba51682fba088cbf65fd32343c566cb8fafc99d02a747898825'
 MODEL_ID = 'models/l20_10_left/linkerhand_l20_10_left.urdf'
 ACTIVE = tuple(range(11)) + tuple(range(15, 20))
 BRIDGE_PATH_POLICY = 'bridge_path_v1'
 
 
 class FactoryMapping:
-    def __init__(self, thumb_axes="native"):
+    def __init__(self, thumb_axes="native", hand="left"):
         if thumb_axes not in ('native','swapped'):
             raise ValueError('Unknown thumb axis adapter')
+        if hand not in ('left','right'):raise ValueError('Unknown hand side')
+        self.hand=hand
         self.thumb_axes=thumb_axes
-        path = ROOT / 'config/l20_10_left_factory.json' 
+        self.model_id=f'models/l20_10_{hand}/linkerhand_l20_10_{hand}.urdf'
+        path = ROOT / f'config/l20_10_{hand}_factory.json'
         self.sha256 = hashlib.sha256(path.read_bytes()).hexdigest()
-        if self.sha256 != PROFILE_SHA256:
-            raise ValueError('Left factory mapping differs from the audited profile')
+        if self.sha256 != (PROFILE_SHA256 if hand=='left' else RIGHT_PROFILE_SHA256):
+            raise ValueError(f'{hand} factory mapping differs from the audited profile')
         self.profile = json.loads(path.read_text())
-        self.model_path = ROOT / MODEL_ID
+        if self.profile.get('hand')!=hand or self.profile.get('model')!=self.model_id:
+            raise ValueError('Factory side/model mismatch')
+        self.model_path = ROOT / self.model_id
         self.model_hash = hashlib.sha256(self.model_path.read_bytes()).hexdigest()
         if self.model_hash != self.profile['urdf_sha256']:
-            raise ValueError('Left factory URDF differs from the audited model')
+            raise ValueError(f'{hand} factory URDF differs from the audited model')
         self.joints = json.loads(json.dumps(self.profile['joints']))
         tree = ET.parse(self.model_path).getroot()
         self.urdf_limits = {j.get('name'): (float(j.find('limit').get('lower')), float(j.find('limit').get('upper')))
